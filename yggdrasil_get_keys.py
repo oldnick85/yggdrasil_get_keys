@@ -5,6 +5,7 @@ import time
 import os
 import signal
 from dataclasses import dataclass
+from tqdm import tqdm
 
 @dataclass(frozen=True)
 class Keys:
@@ -30,7 +31,14 @@ def generate_keys(genkeys : str, timeout : int) -> Keys:
     pub : str = ""
     commands = f"{genkeys}"
     process = subprocess.Popen(commands, shell=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, preexec_fn=os.setsid)
-    time.sleep(timeout)
+    if (logger.getEffectiveLevel() < logging.WARNING):
+        pbar = tqdm(total=timeout)
+        for _ in range(timeout):
+            time.sleep(1)
+            pbar.update()
+        pbar.close()
+    else:
+        time.sleep(timeout)
     poll = process.poll()
     if (poll is not None):
         logger.warning("genkeys run error")
@@ -96,14 +104,19 @@ def main() -> None:
         type=str, default="", help='Save generated keys to existing yggdrasil configuration file')
     parser.add_argument("-v", dest='verbose', help="Print extra logs",
         action="store_true")
+    parser.add_argument("-q", dest='quiet', help="Print minimum logs",
+        action="store_true")
     parser.add_argument("--environment", dest='environment', help="Use environment values YGGDRASIL_PUBLIC_KEY and YGGDRASIL_PRIVATE_KEY if set",
         action="store_true")
                     
     args = parser.parse_args()
-    if (args.verbose):
-        logger.setLevel(logging.DEBUG)
+    if (args.quiet):
+        logger.setLevel(logging.WARNING)
     else:
-        logger.setLevel(logging.INFO)
+        if (args.verbose):
+            logger.setLevel(logging.DEBUG)
+        else:
+            logger.setLevel(logging.INFO)
 
     if (args.environment):
         env_pub = os.environ.get("YGGDRASIL_PUBLIC_KEY")
